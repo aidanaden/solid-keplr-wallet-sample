@@ -140,9 +140,9 @@ export const StoreProvider: Component<Props> = (props) => {
       // XXX: I don't know why they designed that the client meta options in the constructor should be always ingored...
       // @ts-ignore
       wc._clientMeta = {
-        name: "Coinhall test",
-        description: "Coinhall test",
-        url: "http://localhost:3000",
+        name: "solid-keplr-wallet",
+        description: "solid-keplr-wallet for coinhall testing",
+        url: "https://solid-keplr-wallet-sample.vercel.app/",
         icons: wcLogoURI
           ? [
               // Keplr mobile app can't show svg image.
