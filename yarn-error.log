@@ -1,0 +1,57 @@
+Arguments: 
+  /home/aidan/.nvm/versions/node/v14.19.2/bin/node /home/aidan/.yarn/bin/yarn.js add @keplr-wallet/types @cosmjs/starget solid-bootstrap
+
+PATH: 
+  /home/aidan/.yarn/bin:/home/aidan/.config/yarn/global/node_modules/.bin:/home/aidan/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/remote-cli:/home/aidan/.nvm/versions/node/v14.19.2/bin:/home/aidan/.yarn/bin:/home/aidan/.config/yarn/global/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Users/aidan/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/aidan/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/OpenJDK/jdk-11.0.2/bin:/mnt/c/Program Files/Git/cmd:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Users/aidan/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/aidan/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/IntelliJ IDEA Community Edition 2021.3.2/bin
+
+Yarn version: 
+  1.22.18
+
+Node version: 
+  14.19.2
+
+Platform: 
+  linux x64
+
+Trace: 
+  Error: https://registry.yarnpkg.com/@cosmjs%2fstarget: Not found
+      at Request.params.callback [as _callback] (/home/aidan/.yarn/lib/cli.js:66138:18)
+      at Request.self.callback (/home/aidan/.yarn/lib/cli.js:140883:22)
+      at Request.emit (events.js:400:28)
+      at Request.<anonymous> (/home/aidan/.yarn/lib/cli.js:141855:10)
+      at Request.emit (events.js:400:28)
+      at IncomingMessage.<anonymous> (/home/aidan/.yarn/lib/cli.js:141777:12)
+      at Object.onceWrapper (events.js:519:28)
+      at IncomingMessage.emit (events.js:412:35)
+      at endReadableNT (internal/streams/readable.js:1333:12)
+      at processTicksAndRejections (internal/process/task_queues.js:82:21)
+
+npm manifest: 
+  {
+    "name": "vite-template-solid",
+    "version": "0.0.0",
+    "description": "",
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "serve": "vite preview"
+    },
+    "license": "MIT",
+    "devDependencies": {
+      "autoprefixer": "^10.4.7",
+      "postcss": "^8.4.14",
+      "tailwindcss": "^3.0.24",
+      "typescript": "^4.6.4",
+      "vite": "^2.9.9",
+      "vite-plugin-solid": "^2.2.6"
+    },
+    "dependencies": {
+      "solid-js": "^1.4.2"
+    }
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
