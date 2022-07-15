@@ -1,17 +1,20 @@
 import {
+  Accessor,
   Component,
   createContext,
   createEffect,
   createMemo,
   createSignal,
   JSXElement,
+  Setter,
   useContext,
 } from "solid-js";
-import { Keplr } from "@keplr-wallet/types";
+import { ChainInfo, Keplr } from "@keplr-wallet/types";
 import { BroadcastMode, StdTx } from "@cosmjs/launchpad";
+import { OfflineSigner, OfflineDirectSigner } from "@cosmjs/proto-signing";
+import semver from "semver";
 
-import { getKeplrFromWindow } from "./get-keplr";
-import { KeplrAccountBase } from "../Account";
+import { KeplrAccountBase, WalletStatus } from "../Account";
 import junoChainInfo from "../juno";
 import { KeplrWalletConnectV1 } from "@keplr-wallet/wc-client";
 import { isMobile } from "@walletconnect/browser-utils";
@@ -21,8 +24,8 @@ import Axios from "axios";
 import { KeplrWalletConnectQRModal } from "../modals";
 import KeplrConnectionSelectModal from "../modals/keplr-connection-selection";
 import { ChainInfos } from "../config/chain-infos";
-
-// const semver = require("semver");
+import { getKeplrFromWindow } from "./get-keplr";
+import { AccountInitManagement } from "./account-init-management";
 
 export async function sendTxWC(
   chainId: string,
@@ -72,7 +75,18 @@ export async function sendTxWC(
 }
 
 type storeContextType = {
-  accountStore: KeplrAccountBase;
+  getKeplr: Accessor<() => Promise<Keplr | undefined>>;
+  accountHasInit: Accessor<boolean>;
+  setAccountHasInit: Setter<boolean>;
+  walletAddress: Accessor<string>;
+  walletStatus: Accessor<WalletStatus>;
+  init: () => Promise<void>;
+  disconnect: () => void;
+  clearLastUsedKeplr(): void;
+  connectionType?: Accessor<"extension" | "wallet-connect">;
+  setDefaultConnectionType(
+    type: "extension" | "wallet-connect" | undefined
+  ): void;
 };
 
 const storeContext = createContext<storeContextType | null>(null);
@@ -168,8 +182,6 @@ export const StoreProvider: Component<Props> = (props) => {
       }
     }
 
-    // return await getKeplrFromWindow();
-
     return (async () => {
       // First, try to get keplr from window.
       const keplrFromWindow = await getKeplrFromWindow();
@@ -256,6 +268,10 @@ export const StoreProvider: Component<Props> = (props) => {
             resolve(keplr);
             cleanUp();
           }
+
+          connector.on("disconnect", () => {
+            disconnect();
+          });
         });
 
         if (isMobile()) {
@@ -299,45 +315,195 @@ export const StoreProvider: Component<Props> = (props) => {
     // };
   })();
 
-  const [accountStore, setAccountStore] = createSignal(
-    new KeplrAccountBase(
-      eventListener,
-      [junoChainInfo],
-      junoChainInfo.chainId,
-      {
-        suggestChain: true,
-        suggestChainFn: async (keplr, chainInfo) => {
-          if (
-            keplr.mode === "mobile-web"
-            // &&
-            // In keplr mobile below 0.10.9, there is no receiver for the suggest chain.
-            // Therefore, it cannot be processed because it takes infinite pending.
-            // As of 0.10.10, experimental support was added.
-            // !semver.satisfies(keplr.version, ">=0.10.10")
-          ) {
-            // Can't suggest the chain on mobile web.
-            return;
-          }
+  const [keplr, setKeplr] = createSignal<Keplr | undefined>(undefined);
 
-          if (keplr instanceof KeplrWalletConnectV1) {
-            // Still, can't suggest the chain using wallet connect.
-            return;
-          }
-
-          await keplr.experimentalSuggestChain(chainInfo);
-        },
-        autoInit: false,
-        getKeplr: getKeplr(),
-      }
-    )
+  const [walletVersion, setWalletVersion] = createSignal<string | undefined>(
+    undefined
   );
+  const [walletStatus, setWalletStatus] = createSignal<WalletStatus>(
+    WalletStatus.NotInit
+  );
+  const [rejectionReason, setRejectionReason] = createSignal<Error | undefined>(
+    undefined
+  );
+  const [walletName, setWalletName] = createSignal<string | undefined>(
+    undefined
+  );
+  const [bech32Address, setBech32Address] = createSignal<string | undefined>(
+    undefined
+  );
+  const [walletAddress, setWalletAddress] = createSignal<string | undefined>(
+    undefined
+  );
+  const [pubKey, setPubKey] = createSignal<Uint8Array | undefined>(undefined);
+  const [offlineSigner, setOfflineSigner] = createSignal<
+    OfflineSigner | OfflineDirectSigner | undefined
+  >(undefined);
+  const [hasInited, setHasInited] = createSignal(false);
+  // protected _txTypeInProgress: string = "";
+
+  const enable = async (keplr: Keplr, chainId: string): Promise<void> => {
+    const chainInfo = junoChainInfo;
+
+    await suggestChain(keplr, chainInfo);
+    await keplr.enable(chainId);
+  };
+
+  const suggestChain = async (
+    keplr: Keplr,
+    chainInfo: ChainInfo
+  ): Promise<void> => {
+    if (
+      keplr.mode === "mobile-web" &&
+      // In keplr mobile below 0.10.9, there is no receiver for the suggest chain.
+      // Therefore, it cannot be processed because it takes infinite pending.
+      // As of 0.10.10, experimental support was added.
+      !semver.satisfies(keplr.version, ">=0.10.10")
+    ) {
+      // Can't suggest the chain on mobile web.
+      return;
+    }
+
+    if (keplr instanceof KeplrWalletConnectV1) {
+      // Still, can't suggest the chain using wallet connect.
+      return;
+    }
+
+    await keplr.experimentalSuggestChain(chainInfo);
+  };
+
+  const handleInit = () => init();
+
+  const init = async () => {
+    console.log("running init!");
+
+    // If wallet status is not exist, there is no need to try to init because it always fails.
+    if (walletStatus() === WalletStatus.NotExist) {
+      console.log("wallet status doesnt exist!");
+      return;
+    }
+
+    // If the store has never been initialized, add the event listener.
+    if (!hasInited()) {
+      // If key store in the keplr extension is changed, this event will be dispatched.
+      eventListener.addEventListener("keplr_keystorechange", handleInit);
+    }
+    setHasInited(true);
+
+    // Set wallet status as loading whenever try to init.
+    setWalletStatus(WalletStatus.Loading);
+
+    const keplr = await getKeplr()();
+    setKeplr(keplr);
+
+    if (!keplr) {
+      setWalletStatus(WalletStatus.NotExist);
+      return;
+    }
+
+    setWalletVersion(keplr.version);
+
+    try {
+      console.log("trying to enable with chain id: ", junoChainInfo.chainId);
+      await enable(keplr, junoChainInfo.chainId);
+    } catch (e) {
+      console.error(e);
+      setWalletStatus(WalletStatus.Rejected);
+      setRejectionReason(e);
+      return;
+    }
+
+    try {
+      console.log("trying to get key with chain id: ", junoChainInfo.chainId);
+      const key = await keplr.getKey(junoChainInfo.chainId);
+      setBech32Address(key.bech32Address);
+      setWalletName(key.name);
+      setPubKey(key.pubKey);
+
+      // Set the wallet status as loaded after getting all necessary infos.
+      setWalletStatus(WalletStatus.Loaded);
+    } catch (e) {
+      console.error(e);
+      // Caught error loading key
+      // Reset properties, and set status to Rejected
+      setBech32Address("");
+      setWalletName("");
+      setPubKey(new Uint8Array(0));
+
+      setWalletStatus(WalletStatus.Rejected);
+      setRejectionReason(e);
+    }
+
+    try {
+      console.log(
+        "trying to get offlineSigner with chain id: ",
+        junoChainInfo.chainId
+      );
+      const offlineSigner = await keplr.getOfflineSignerAuto(
+        junoChainInfo.chainId
+      );
+      const accounts = await offlineSigner.getAccounts();
+      const accountAddress = accounts[0].address;
+
+      console.log("setting wallet address signalt to: ", accountAddress);
+
+      setOfflineSigner(offlineSigner);
+      setWalletAddress(accountAddress);
+    } catch (e) {
+      console.error(e);
+      // Caught error loading offlineSigner
+      // Reset properties, and set status to Rejected
+      setOfflineSigner(undefined);
+
+      setWalletStatus(WalletStatus.Rejected);
+      setRejectionReason(e);
+    }
+
+    if (walletStatus() !== WalletStatus.Rejected) {
+      // Reset previous rejection error message
+      setRejectionReason(undefined);
+    }
+  };
+
+  const clearLastUsedKeplr = () => {
+    lastUsedKeplrRef = undefined;
+    setConnectionType(undefined);
+  };
+
+  const disconnect = () => {
+    setWalletStatus(WalletStatus.NotInit);
+    setHasInited(false);
+    eventListener.removeEventListener("keplr_keystorechange", handleInit);
+    setBech32Address("");
+    setWalletAddress("");
+    setWalletName("");
+    setPubKey(new Uint8Array(0));
+    clearLastUsedKeplr();
+  };
 
   createEffect(() => {
     console.log("wcUri length: ", wcUri().length);
   });
 
   return (
-    <storeContext.Provider value={{ accountStore: accountStore() }}>
+    <storeContext.Provider
+      value={{
+        getKeplr: getKeplr,
+        walletAddress: walletAddress,
+        walletStatus: walletStatus,
+        accountHasInit: hasInited,
+        setAccountHasInit: setHasInited,
+        init: init,
+        disconnect: disconnect,
+        clearLastUsedKeplr: clearLastUsedKeplr,
+        connectionType: connectionType,
+        setDefaultConnectionType: (
+          type: "extension" | "wallet-connect" | undefined
+        ) => {
+          defaultConnectionTypeRef = type;
+        },
+      }}
+    >
       <KeplrConnectionSelectModal
         isVisible={isExtensionSelectionModalOpen()}
         overrideWithKeplrInstallLink={
@@ -362,7 +528,7 @@ export const StoreProvider: Component<Props> = (props) => {
         }}
         uri={wcUri()}
       />
-      {/* <AccountInitManagement /> */}
+      <AccountInitManagement />
       {props.children}
     </storeContext.Provider>
   );

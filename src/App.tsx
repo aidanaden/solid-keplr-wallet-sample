@@ -16,8 +16,9 @@ import {
 import "bootstrap/dist/css/bootstrap.min.css";
 import junoChainInfo from "./juno";
 import osmoChainInfo from "./osmo";
-import { onMount } from "solid-js";
+import { createEffect, createMemo, onMount, Show, on } from "solid-js";
 import { StoreProvider, useStore } from "./store";
+import { WalletStatus } from "./Account";
 
 const App = () => {
   const openWallet = async (chainInfo: any) => {
@@ -47,26 +48,19 @@ const App = () => {
   };
 
   const getAddress = async (chainInfo: ChainInfo) => {
-    alert(`address for ${chainInfo.chainName} : ${accountStore.address}`);
+    alert(`address for ${chainInfo.chainName} : ${address()}`);
   };
-
-  // const signSomething = (chainInfo: any) => {
-  //   return;
-  // };
-
-  // const onSubmit = (e: any, chainInfo: any) => {
-  //   return;
-  // };
 
   const signSomething = async (chainInfo: ChainInfo) => {
     const LOGIN_PHRASE = "WARNING: sign this message ONLY on coinhall.org!";
-    const isValid = await accountStore.signMsg(LOGIN_PHRASE);
+    console.log("signing...");
+    // const isValid = await accountStore().(LOGIN_PHRASE);
 
-    if (isValid) {
-      alert("Wallet address registration completed.");
-    } else {
-      alert("Wallet address registration failed.");
-    }
+    // if (isValid) {
+    //   alert("Wallet address registration completed.");
+    // } else {
+    //   alert("Wallet address registration failed.");
+    // }
 
     // if (!(window as any).getOfflineSigner || !(window as any).keplr) {
     //   alert("Please install keplr extension");
@@ -197,15 +191,18 @@ const App = () => {
     return false;
   };
 
-  onMount(() => {
-    window.addEventListener("keplr_keystorechange", () => {
-      alert(
-        "Key store in Keplr is changed. You may need to refetch the account info."
-      );
-    });
-  });
+  // const accountStore = createMemo(() => useStore().accountStore);
+  // const walletStatus = createMemo(() => accountStore().walletStatus);
+  const connectionType = createMemo(() => useStore().connectionType);
+  const address = useStore().walletAddress;
+  const initFn = useStore().init;
+  const disconnectFn = useStore().disconnect;
 
-  const { accountStore } = useStore();
+  createEffect(
+    on(address, (add) => {
+      console.log("account addrress: ", add);
+    })
+  );
 
   return (
     <Container>
@@ -219,19 +216,38 @@ const App = () => {
         </div>
       </div>
       <Stack gap={5}>
-        <Card>
-          <Card.Header>Connect Juno wallet</Card.Header>
-          <Card.Body>
-            <Button
-              type="submit"
-              variant="primary"
-              // onClick={() => openWallet(junoChainInfo)}
-              onClick={() => accountStore.init()}
-            >
-              Connect kepler
-            </Button>
-          </Card.Body>
-        </Card>
+        <Show
+          when={!!address()}
+          fallback={
+            <Card>
+              <Card.Header>Connect Juno wallet</Card.Header>
+              <Card.Body>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  // onClick={() => openWallet(junoChainInfo)
+                  onClick={async () => await initFn()}
+                >
+                  Connect kepler
+                </Button>
+              </Card.Body>
+            </Card>
+          }
+        >
+          <Card>
+            <Card.Header>Disconnect Juno wallet</Card.Header>
+            <Card.Body>
+              <Button
+                type="submit"
+                variant="primary"
+                // onClick={() => openWallet(junoChainInfo)}
+                onClick={() => disconnectFn()}
+              >
+                Disconnect
+              </Button>
+            </Card.Body>
+          </Card>
+        </Show>
         <Card>
           <Card.Header>Get Juno wallet address</Card.Header>
           <Card.Body>
